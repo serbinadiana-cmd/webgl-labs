@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Лабораторна робота №3</title>
+    <style>
+        canvas {
+            border: 2px solid black;
+            margin-bottom: 20px;
+            display: block;
+        }
+        button {
+            padding: 8px 15px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Лабораторна робота №3</h2>
+<p>Контекст WebGL 2.0, RGBA, viewport та scissor</p>
+
+<button onclick="toggleScissor()">Увімкнути / Вимкнути SCISSOR</button>
+
+<!-- Основний canvas -->
+<canvas id="mainCanvas" width="600" height="400"></canvas>
+
+<!-- Додатковий canvas -->
+<canvas id="secondCanvas" width="300" height="200"></canvas>
+
+<script>
+    // ================== ОСНОВНИЙ CANVAS ==================
+    const mainCanvas = document.getElementById("mainCanvas");
+    const gl = mainCanvas.getContext("webgl2");
+    let scissorEnabled = true;
+
+    if (!gl) {
+        alert("WebGL 2.0 не підтримується");
+    } else {
+        gl.enable(gl.SCISSOR_TEST);
+        const width = mainCanvas.width;
+        const height = mainCanvas.height;
+
+        function drawMain() {
+            // Увімкнення/вимкнення SCISSOR
+            if (scissorEnabled) {
+                gl.enable(gl.SCISSOR_TEST);
+            } else {
+                gl.disable(gl.SCISSOR_TEST);
+            }
+
+            // Область 1 (лівий нижній кут) - червоний канал випадковий
+            gl.viewport(0, 0, width / 2, height / 2);
+            gl.scissor(0, 0, width / 2, height / 2);
+            gl.clearColor(Math.random(), 0.3, 0.3, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Область 2 (правий нижній кут) - зелений канал випадковий
+            gl.viewport(width / 2, 0, width / 2, height / 2);
+            gl.scissor(width / 2, 0, width / 2, height / 2);
+            gl.clearColor(0.3, Math.random(), 0.3, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Область 3 (лівий верхній кут) - синій канал випадковий
+            gl.viewport(0, height / 2, width / 2, height / 2);
+            gl.scissor(0, height / 2, width / 2, height / 2);
+            gl.clearColor(0.3, 0.3, Math.random(), 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Область 4 (правий верхній кут) - з прозорістю
+            gl.viewport(width / 2, height / 2, width / 2, height / 2);
+            gl.scissor(width / 2, height / 2, width / 2, height / 2);
+            gl.clearColor(Math.random(), Math.random(), 0.3, 0.7);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+
+        drawMain();
+        // Автоматична зміна кольорів кожні 2 секунди
+        setInterval(drawMain, 2000);
+
+        window.toggleScissor = function() {
+            scissorEnabled = !scissorEnabled;
+            drawMain();
+        };
+    }
+
+    // ================== ДРУГИЙ CANVAS ==================
+    const secondCanvas = document.getElementById("secondCanvas");
+    const gl2 = secondCanvas.getContext("webgl2");
+
+    if (gl2) {
+        gl2.viewport(0, 0, secondCanvas.width, secondCanvas.height);
+        
+        let alpha = 1.0;
+        let decreasing = true;
+
+        function pulse() {
+            // Зміна прозорості для ефекту пульсації
+            if (decreasing) {
+                alpha -= 0.05;
+                if (alpha <= 0.3) decreasing = false;
+            } else {
+                alpha += 0.05;
+                if (alpha >= 1.0) decreasing = true;
+            }
+            
+            gl2.clearColor(0.6, 0.4, 0.8, alpha);
+            gl2.clear(gl2.COLOR_BUFFER_BIT);
+        }
+        
+        // Оновлення кожні 100 мс для плавної анімації
+        setInterval(pulse, 100);
+    }
+</script>
+</body>
+</html>
