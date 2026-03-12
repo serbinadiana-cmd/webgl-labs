@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Game WebGL</title>
+    <style>
+        canvas {
+            border: 2px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h2>Лабораторна робота №11-12</h2>
+    <p>Міні-гра у WebGL 2.0 — "Злови квадрат"</p>
+    
+    <canvas id="glCanvas" width="700" height="500"></canvas>
+
+    <script>
+        // ===== 1. ОТРИМАННЯ КОНТЕКСТУ =====
+        const canvas = document.getElementById("glCanvas");
+        const gl = canvas.getContext("webgl2");
+        
+        if (!gl) {
+            alert("WebGL 2.0 не підтримується");
+        }
+
+        // ===== 2. ВЕРШИННИЙ ШЕЙДЕР =====
+        const vertexShaderSource = `#version 300 es
+        in vec2 a_position;                 // координати вершини
+        uniform vec2 u_translation;          // переміщення
+        
+        void main() {
+            vec2 pos = a_position + u_translation;
+            gl_Position = vec4(pos, 0.0, 1.0);
+        }`;
+
+        // ===== 3. ФРАГМЕНТНИЙ ШЕЙДЕР =====
+        const fragmentShaderSource = `#version 300 es
+        precision highp float;
+        uniform vec4 u_color;                 // колір об'єкта
+        out vec4 outColor;
+        
+        void main() {
+            outColor = u_color;
+        }`;
+
+        // ===== 4. ФУНКЦІЯ СТВОРЕННЯ ШЕЙДЕРА =====
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        // ===== 5. КОМПІЛЯЦІЯ ШЕЙДЕРІВ =====
+        const vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+        const fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+        // ===== 6. СТВОРЕННЯ ПРОГРАМИ =====
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
+        }
+        
+        gl.useProgram(program);
+
+        // ===== 7. БУФЕР (спільний для всіх об'єктів) =====
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+
+        // ===== 8. АТРИБУТИ =====
+        const positionLocation = gl.getAttribLocation(program, "a_position");
+        gl.enableVertexAttribArray(positionLocation);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        // ===== 9. UNIFORM =====
+        const translationLocation = gl.getUniformLocation(program, "u_translation");
+        const colorLocation = gl.getUniformLocation(program, "u_color");
+
+        // ===== 10. ПОЧАТКОВІ ПОЗИЦІЇ =====
+        let playerX = 0;           // позиція гравця по X
+        let playerY = 0;           // позиція гравця по Y
+        
+        // Випадкова позиція цілі в діапазоні [-0.8; 0.8]
+        let targetX = Math.random() * 1.6 - 0.8;
+        let targetY = Math.random() * 1.6 - 0.8;
+
+        // ===== 11. КЕРУВАННЯ З КЛАВІАТУРИ =====
+        document.addEventListener("keydown", function(e) {
+            const speed = 0.05;    // швидкість руху гравця
+            
+            if (e.key === "ArrowLeft")  playerX -= speed;
+            if (e.key === "ArrowRight") playerX += speed;
+            if (e.key === "ArrowUp")    playerY += speed;
+            if (e.key === "ArrowDown")  playerY -= speed;
+            
+            // Обмеження, щоб гравець не виходив за межі
+            playerX = Math.max(-0.9, Math.min(0.9, playerX));
+            playerY = Math.max(-0.9, Math.min(0.9, playerY));
+        });
+
+        // ===== 12. НАЛАШТУВАННЯ СЦЕНИ =====
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(1, 1, 1, 1);   // білий фон
+
+        // ===== 13. ОСНОВНА ФУНКЦІЯ МАЛЮВАННЯ =====
+        function draw() {
+            // Очищуємо екран
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            // ===== МАЛЮЄМО ГРАВЦЯ (синій трикутник) =====
+            const triangle = new Float32Array([
+                 0.0,  0.08,   // вершина 0 (верх)
+                -0.08, -0.08,  // вершина 1 (лівий низ)
+                 0.08, -0.08   // вершина 2 (правий низ)
+            ]);
+            
+            gl.bufferData(gl.ARRAY_BUFFER, triangle, gl.STATIC_DRAW);
+            gl.uniform2f(translationLocation, playerX, playerY);
+            gl.uniform4f(colorLocation, 0, 0, 1, 1);   // синій колір
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+            // ===== МАЛЮЄМО ЦІЛЬ (червоний квадрат) =====
+            const square = new Float32Array([
+                -0.05,  0.05,   // ліва верхня
+                 0.05,  0.05,   // права верхня
+                -0.05, -0.05,   // ліва нижня
+                 0.05, -0.05    // права нижня
+            ]);
+            
+            gl.bufferData(gl.ARRAY_BUFFER, square, gl.STATIC_DRAW);
+            gl.uniform2f(translationLocation, targetX, targetY);
+            gl.uniform4f(colorLocation, 1, 0, 0, 1);   // червоний колір
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // ===== ПЕРЕВІРКА ЗІТКНЕННЯ =====
+            // Якщо гравець торкнувся цілі (відстань менше 0.1)
+            if (Math.abs(playerX - targetX) < 0.1 && 
+                Math.abs(playerY - targetY) < 0.1) {
+                
+                // Створюємо нову випадкову позицію для цілі
+                targetX = Math.random() * 1.6 - 0.8;
+                targetY = Math.random() * 1.6 - 0.8;
+            }
+            
+            // Запитуємо наступний кадр
+            requestAnimationFrame(draw);
+        }
+
+        // Запускаємо гру
+        draw();
+    </script>
+</body>
+</html>
