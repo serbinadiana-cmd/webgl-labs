@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Lab 9 - TRS</title>
+    <style>
+        canvas { 
+            border: 2px solid black; 
+        }
+    </style>
+</head>
+<body>
+    <h2>Лабораторна робота №9-10</h2>
+    <p>Комбіновані трансформації: Translation + Rotation + Scale</p>
+    
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+
+    <script>
+        // ===== 1. ОТРИМАННЯ КОНТЕКСТУ =====
+        const canvas = document.getElementById("glCanvas");
+        const gl = canvas.getContext("webgl2");
+        
+        if (!gl) {
+            alert("WebGL2 не підтримується");
+        }
+
+        // ===== 2. ВЕРШИННИЙ ШЕЙДЕР =====
+        const vertexShaderSource = `#version 300 es
+        in vec2 a_position;                 // координати вершини
+        uniform vec2 u_translation;          // переміщення
+        uniform float u_rotation;             // кут повороту
+        uniform vec2 u_scale;                 // масштаб
+        
+        void main() {
+            // 1. МАСШТАБУВАННЯ (Scale)
+            vec2 scaled = a_position * u_scale;
+            
+            // 2. ОБЕРТАННЯ (Rotation)
+            float c = cos(u_rotation);
+            float s = sin(u_rotation);
+            vec2 rotated = vec2(
+                scaled.x * c - scaled.y * s,
+                scaled.x * s + scaled.y * c
+            );
+            
+            // 3. ПЕРЕМІЩЕННЯ (Translation)
+            vec2 position = rotated + u_translation;
+            
+            gl_Position = vec4(position, 0.0, 1.0);
+        }`;
+
+        // ===== 3. ФРАГМЕНТНИЙ ШЕЙДЕР =====
+        const fragmentShaderSource = `#version 300 es
+        precision highp float;
+        out vec4 outColor;
+        
+        void main() {
+            outColor = vec4(0.2, 0.7, 0.4, 1.0);   // зелений колір
+        }`;
+
+        // ===== 4. ФУНКЦІЯ СТВОРЕННЯ ШЕЙДЕРА =====
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        // ===== 5. КОМПІЛЯЦІЯ ШЕЙДЕРІВ =====
+        const vs = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+        const fs = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+        // ===== 6. СТВОРЕННЯ ПРОГРАМИ =====
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
+        }
+        
+        gl.useProgram(program);
+
+        // ===== 7. ГЕОМЕТРІЯ (ТРИКУТНИК) =====
+        const vertices = new Float32Array([
+             0.0,  0.5,   // вершина 0 (верх)
+            -0.5, -0.5,   // вершина 1 (лівий низ)
+             0.5, -0.5    // вершина 2 (правий низ)
+        ]);
+
+        // ===== 8. ПЕРЕДАЧА ДАНИХ У GPU =====
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+        // ===== 9. ЗВ'ЯЗУВАННЯ АТРИБУТІВ =====
+        const positionLocation = gl.getAttribLocation(program, "a_position");
+        gl.enableVertexAttribArray(positionLocation);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        // ===== 10. ОТРИМАННЯ UNIFORM =====
+        const translationLocation = gl.getUniformLocation(program, "u_translation");
+        const rotationLocation = gl.getUniformLocation(program, "u_rotation");
+        const scaleLocation = gl.getUniformLocation(program, "u_scale");
+
+        // ===== 11. НАЛАШТУВАННЯ СЦЕНИ =====
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(1, 1, 1, 1);   // білий фон
+
+        // ===== 12. ПАРАМЕТРИ АНІМАЦІЇ =====
+        let angle = 0;           // кут повороту
+        let scale = 1;           // масштаб
+        let growing = true;      // напрям масштабування
+        let tx = 0;              // позиція по X
+
+        // ===== 13. ФУНКЦІЯ РЕНДЕРИНГУ =====
+        function render() {
+            // Очищуємо екран
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            // --- 1. ОБЕРТАННЯ (змінюється постійно) ---
+            angle += 0.02;
+            
+            // --- 2. МАСШТАБУВАННЯ (пульсація від 0.5 до 1.5) ---
+            if (growing) {
+                scale += 0.01;
+                if (scale > 1.5) growing = false;
+            } else {
+                scale -= 0.01;
+                if (scale < 0.5) growing = true;
+            }
+            
+            // --- 3. ПЕРЕМІЩЕННЯ (рух вліво-вправо) ---
+            tx += 0.005;
+            if (tx > 1) tx = -1;   // повернення на початок
+            
+            // Передача значень у шейдери
+            gl.uniform2f(scaleLocation, scale, scale);        // однаковий масштаб по X та Y
+            gl.uniform1f(rotationLocation, angle);            // кут повороту
+            gl.uniform2f(translationLocation, tx, 0);         // рух тільки по X
+            
+            // Малюємо трикутник
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            
+            // Запитуємо наступний кадр
+            requestAnimationFrame(render);
+        }
+
+        // Запускаємо анімацію
+        render();
+    </script>
+</body>
+</html>
